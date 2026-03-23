@@ -26,6 +26,8 @@ IMPORTANT RULES (MUST FOLLOW):
 - Do NOT include variable names or symbols from the problem.
 - Do NOT include worked examples.
 - Strategies must be fully abstract and reusable.
+- The DESCRIPTION field must be short and embedding-friendly: it should summarize the structural type of the differential equation and the solving idea using plain natural language only.
+- The DESCRIPTION field should mention only equation family, operator pattern, and method family; no formulas, no LaTeX, no symbols.
 - Use EXACTLY the format shown below.
 
 PROBLEM (FOR CONTEXT ONLY — DO NOT MENTION):
@@ -38,17 +40,12 @@ OUTPUT FORMAT (COPY EXACTLY):
 
 MEMORY 1:
 TITLE: <abstract strategy name>
-DESCRIPTION: <one general sentence>
+DESCRIPTION: <short structural signature for retrieval>
 CONTENT: <detailed, abstract, reusable reasoning strategy>
 
 MEMORY 2:
 TITLE: <abstract strategy name>
-DESCRIPTION: <one general sentence>
-CONTENT: <detailed, abstract, reusable reasoning strategy>
-
-(OPTIONAL) MEMORY 3:
-TITLE: <abstract strategy name>
-DESCRIPTION: <one general sentence>
+DESCRIPTION: <short structural signature for retrieval>
 CONTENT: <detailed, abstract, reusable reasoning strategy>
 
 END OF OUTPUT.
@@ -67,6 +64,8 @@ IMPORTANT RULES (MUST FOLLOW):
 - Do NOT include variable names or symbols from the problem.
 - Do NOT include worked examples.
 - Lessons must be abstract and preventive.
+- The DESCRIPTION field must be short and embedding-friendly: it should summarize the structural type of the differential equation and the failure/check point using plain natural language only.
+- The DESCRIPTION field should mention only equation family, operator pattern, and common pitfall; no formulas, no LaTeX, no symbols.
 - Use EXACTLY the format shown below.
 
 PROBLEM (FOR CONTEXT ONLY — DO NOT MENTION):
@@ -82,20 +81,41 @@ OUTPUT FORMAT (COPY EXACTLY):
 
 MEMORY 1:
 TITLE: <abstract mistake or check>
-DESCRIPTION: <one general sentence>
+DESCRIPTION: <short structural signature for retrieval>
 CONTENT: <abstract lesson or preventive strategy>
 
 MEMORY 2:
 TITLE: <abstract mistake or check>
-DESCRIPTION: <one general sentence>
-CONTENT: <abstract lesson or preventive strategy>
-
-(OPTIONAL) MEMORY 3:
-TITLE: <abstract mistake or check>
-DESCRIPTION: <one general sentence>
+DESCRIPTION: <short structural signature for retrieval>
 CONTENT: <abstract lesson or preventive strategy>
 
 END OF OUTPUT.
+"""
+
+
+KEY_CONCEPT_EXTRACTION_PROMPT = """You are an AI assistant extracting the essential structural ideas from a differential equation problem.
+
+Do NOT solve the problem.
+
+Your goal is to produce a compact structural signature of the differential equation that can be matched against stored memories using semantic similarity.
+
+IMPORTANT RULES:
+- Use only the LaTeX form and the equation structure.
+- Focus on the differential equation type, order, linearity, homogeneity, presence of forcing terms, variable coefficients, separability, exactness, special operators, and other structural cues.
+- Do NOT mention concrete numbers, coefficients, or specific solutions.
+- Do NOT mention variable names or symbols from the problem.
+- Do NOT include calculations.
+- Keep the output short, precise, and retrieval-oriented.
+- Write in plain natural language only.
+- No LaTeX in the output.
+
+Output format:
+STRUCTURAL SIGNATURE: [one short sentence]
+KEY STRUCTURAL FEATURES: [2-5 short phrases describing the equation class and operators]
+LIKELY SOLUTION FAMILY: [one short phrase naming the relevant method family]
+
+Problem:
+{question}
 """
 
 
@@ -108,13 +128,12 @@ Problem (in LaTeX):
 
 INSTRUCTIONS:
 1. Provide a clear step-by-step solution.
-2. Be concise and don't write obvious transformations.
-3. The final solution MUST be written in LaTeX.
-4. The FINAL answer MUST be in the format:
+2. The final solution MUST be written in LaTeX.
+3. The FINAL answer MUST be in the format:
 
 Final answer: \\boxed{{<solution>}}
 
-5. Do NOT include anything after the boxed expression.
+4. Do NOT include anything after the boxed expression.
 
 BEGIN SOLUTION:
 """
@@ -134,29 +153,14 @@ Ignore non-relevant strategies.
 
 INSTRUCTIONS:
 1. Provide a clear step-by-step solution.
-2. Show intermediate transformations and reasoning.
-3. The final solution MUST be written in LaTeX.
-4. The FINAL answer MUST be in the format:
+2. The final solution MUST be written in LaTeX.
+3. The FINAL answer MUST be in the format:
 
 Final answer: \\boxed{{<solution>}}
 
-5. Do NOT include anything after the boxed expression.
+4. Do NOT include anything after the boxed expression.
 
 BEGIN SOLUTION:
-"""
-
-
-KEY_CONCEPT_EXTRACTION_PROMPT = """You are an AI assistant extracting the essential ideas from a differential equation problem.
-
-Do NOT solve the problem.
-Instead, identify the main concept and the abstract solution ideas that would be relevant.
-
-Output format:
-- Core Concept: [one or two sentences]
-- Key Solution Ideas: [bullet points or short sentences, abstract and general, no calculations]
-
-Problem:
-{question}
 """
 
 

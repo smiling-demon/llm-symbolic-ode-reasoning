@@ -8,31 +8,27 @@ from methods.base import BaseMethod
 
 DECOMPOSITION_PROMPT_TEMPLATE = """You are a precise mathematical assistant specialized in solving differential equations.
 
-Decompose the following differential equation into the smallest ordered list of simpler subproblems needed to solve it.
+Decompose the following differential equation into a minimal ordered list of at most 3 simpler subproblems needed to solve it.
 
 Problem (in LaTeX):
 {question}
 
 INSTRUCTIONS:
 1. Output only the decomposition, not the solution.
-2. Each subproblem must be simpler than the original problem.
-3. Keep the decomposition minimal and logically ordered.
-4. Write each subproblem on a separate line using a numbered list.
-5. Do not solve the subproblems here.
-6. Do not include any extra text outside the numbered list.
-
-Example format:
-1. ...
-2. ...
-3. ...
+2. Use no more than 3 subproblems.
+3. Each subproblem must be simpler than the original problem.
+4. Keep the decomposition minimal and logically ordered.
+5. Write each subproblem in plain natural language (no LaTeX, no formulas, no symbolic fragments).
+6. Describe steps conceptually.
+7. Write each subproblem on a separate line using a numbered list.
+8. Do not solve the subproblems.
+9. Do not include any extra text outside the numbered list.
 
 BEGIN DECOMPOSITION:
 """
 
 
 SUBPROBLEM_SOLVING_PROMPT_TEMPLATE = """You are a precise mathematical assistant specialized in solving differential equations.
-
-We are using the Least-to-Most strategy.
 
 Original problem (in LaTeX):
 {question}
@@ -44,10 +40,9 @@ Previously solved subproblems:
 {history}
 
 INSTRUCTIONS:
-1. Solve only the current subproblem.
+1. Solve ONLY the current subproblem.
 2. Use the previously solved subproblems as context.
-3. Show clear step-by-step reasoning.
-4. Be concise and don't write obvious transformations.
+3. Be concise.
 
 BEGIN SOLUTION:
 """
@@ -76,6 +71,7 @@ BEGIN FINAL SOLUTION:
 
 def _parse_subproblems(decomposition_text: str) -> List[str]:
     subproblems = []
+
     for line in decomposition_text.splitlines():
         line = line.strip()
         match = re.match(r"^(?:\d+[\.\)\-:]*|\-|\*)\s*(.+)$", line)
@@ -89,10 +85,10 @@ def _parse_subproblems(decomposition_text: str) -> List[str]:
         if cleaned:
             subproblems = [cleaned]
 
-    return subproblems
+    return subproblems[:3]
 
 
-class LeastToMost(BaseMethod):
+class LeastToMostBatched(BaseMethod):
     def __init__(self, llm, max_new_tokens: int = 1024):
         self.llm = llm
         self.max_new_tokens = max_new_tokens
@@ -105,47 +101,77 @@ class LeastToMost(BaseMethod):
             DECOMPOSITION_PROMPT_TEMPLATE.format(question=eq)
             for eq in equations
         ]
+
         decompositions = self.llm.generate(
             decomposition_prompts,
             max_new_tokens=self.max_new_tokens,
         )
 
-        final_outputs = []
+        all_subproblems = [
+            _parse_subproblems(d) for d in decompositions
+        ]
 
-        for eq, decomposition in zip(equations, decompositions):
-            print("AAA", decomposition, "\nAAA")
-            subproblems = _parse_subproblems(decomposition)
+        histories = [[] for _ in equations]
 
-            history = []
-            for idx, subproblem in enumerate(subproblems, start=1):
-                history_text = "\n\n".join(history) if history else "None"
-                prompt = SUBPROBLEM_SOLVING_PROMPT_TEMPLATE.format(
+        max_steps = max((len(sp) for sp in all_subproblems), default=0)
+
+        for step_idx in range(max_steps):
+            batch_prompts = []
+            batch_indices = []
+
+            for i, (eq, subproblems) in enumerate(zip(equations, all_subproblems)):
+                if step_idx < len(subproblems):
+                    history_text = (
+                        "\n".join(histories[i]) if histories[i] else "None"
+                    )
+
+                    prompt = SUBPROBLEM_SOLVING_PROMPT_TEMPLATE.format(
+                        question=eq,
+                        subproblem=subproblems[step_idx],
+                        history=history_text,
+                    )
+
+                    batch_prompts.append(prompt)
+                    batch_indices.append(i)
+
+            if not batch_prompts:
+                continue
+
+            outputs = self.llm.generate(
+                batch_prompts,
+                max_new_tokens=self.max_new_tokens,
+            )
+
+            for out, i, step_i in zip(outputs, batch_indices, range(len(batch_indices))):
+                subproblem_text = all_subproblems[i][step_idx]
+
+                histories[i].append(
+                    f"Step {step_idx + 1}: {subproblem_text}\nResult: {out.strip()}"
+                )
+
+        final_prompts = []
+
+        for eq, history in zip(equations, histories):
+            history_text = "\n\n".join(history) if history else "None"
+
+            final_prompts.append(
+                FINAL_SYNTHESIS_PROMPT_TEMPLATE.format(
                     question=eq,
-                    subproblem=subproblem,
                     history=history_text,
                 )
-                step_output = self.llm.generate(
-                    [prompt],
-                    max_new_tokens=self.max_new_tokens,
-                )[0]
-
-                history.append(
-                    f"Subproblem #{idx}:\n{subproblem}\n\nSolution:\n{step_output}"
-                )
-
-            final_prompt = FINAL_SYNTHESIS_PROMPT_TEMPLATE.format(
-                question=eq,
-                history="\n\n".join(history) if history else "None",
             )
-            final_output = self.llm.generate(
-                [final_prompt],
-                max_new_tokens=self.max_new_tokens,
-            )[0]
 
-            final_outputs.append(final_output)
+        final_outputs = self.llm.generate(
+            final_prompts,
+            max_new_tokens=self.max_new_tokens,
+        )
 
         return final_outputs
 
 
-def least_to_most(llm, equations: List[str], max_new_tokens: int = 1024) -> List[str]:
-    return LeastToMost(llm, max_new_tokens=max_new_tokens).solve(equations)
+def least_to_most_batched(
+    llm,
+    equations: List[str],
+    max_new_tokens: int = 1024,
+) -> List[str]:
+    return LeastToMostBatched(llm, max_new_tokens=max_new_tokens).solve(equations)

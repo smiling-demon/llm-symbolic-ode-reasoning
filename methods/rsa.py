@@ -15,13 +15,12 @@ Problem (in LaTeX):
 
 INSTRUCTIONS:
 1. Provide a clear step-by-step solution.
-2. Be concise and don't write obvious transformations.
-3. The final solution MUST be written in LaTeX.
-4. The FINAL answer MUST be in the format:
+2. The final solution MUST be written in LaTeX.
+3. The FINAL answer MUST be in the format:
 
 Final answer: \\boxed{{<solution>}}
 
-5. Do NOT include anything after the boxed expression.
+4. Do NOT include anything after the boxed expression.
 
 BEGIN SOLUTION:
 """
@@ -40,15 +39,14 @@ Candidate solutions:from llm.wrapper import LLM
 INSTRUCTIONS:
 1. Analyze all candidate solutions carefully.
 2. Keep only correct and useful reasoning.
-3. Discard incorrect or irrelevant steps.
-4. If all candidates are weak, solve from scratch.
-5. Produce one coherent step-by-step solution.
-6. The final solution MUST be written in LaTeX.
-7. The FINAL answer MUST be in the format:
+3. If all candidates are incorrect, solve from scratch.
+4. Produce one coherent step-by-step solution.
+5. The final solution MUST be written in LaTeX.
+6. The FINAL answer MUST be in the format:
 
 Final answer: \\boxed{{<solution>}}
 
-Do NOT include anything after the boxed expression.
+7. Do NOT include anything after the boxed expression.
 
 BEGIN AGGREGATED SOLUTION:
 """
@@ -58,7 +56,7 @@ class RSA(BaseMethod):
     def __init__(
         self,
         llm,
-        N: int = 3,
+        N: int = 4,
         K: int = 2,
         T: int = 2,
         max_new_tokens: int = 1024,
