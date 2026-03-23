@@ -11,6 +11,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from metrics import exact_match
+from utils import extract_boxed
 
 
 SUCCESS_PROMPT = """You successfully solved a differential equation.
@@ -426,7 +427,7 @@ def train_reasoning_bank(
                     "question": eq,
                     "reasoning": pred,
                     "expected_answer": ref,
-                    "success": exact_match(pred, ref),
+                    "success": exact_match(extract_boxed(pred), ref) if extract_boxed(pred) else False,
                 }
             )
 
@@ -444,8 +445,9 @@ def load_reasoning_bank(storage_path: str = "memory_bank/reasoning_bank.json") -
 def solve_with_reasoning_bank(
     bank: ReasoningBank,
     llm,
-    equations: List[str],
     embed_model: SentenceTransformer,
+    equations: List[str],
+    batch_size: int = 8,
     top_k: int = 2,
     max_new_tokens: int = 1024,
 ) -> List[str]:
@@ -471,4 +473,9 @@ def solve_with_reasoning_bank(
         for eq, mem in zip(equations, memory_contexts)
     ]
 
-    return llm.generate(prompts, max_new_tokens=max_new_tokens)
+    output = []
+
+    for start in range(0, len(prompts), batch_size):
+        output += llm.generate(prompts[start:start + batch_size], max_new_tokens=max_new_tokens)
+
+    return output
