@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from utils.parsing import normalize_output
-
 from metrics.bleu import bleu_score
 from metrics.ast_error_size import ast_error_size
 from metrics.ast_tree_distance import ast_tree_distance
 from metrics.exact_match import exact_match
+
+from utils.parsing import extract_boxed
 
 
 def evaluate_predictions(
@@ -22,14 +22,18 @@ def evaluate_predictions(
     exact_vals = []
 
     for pred, ref in zip(predictions, references):
-        pred_n = normalize_output(pred)
-        ref_n = normalize_output(ref)
+        pred = extract_boxed(pred)
 
-        bleu_vals.append(bleu_score(pred_n, ref_n))
-        ast_err_vals.append(ast_error_size(pred_n, ref_n))
-        ast_tree_vals.append(ast_tree_distance(pred_n, ref_n))
-
-        exact_vals.append(exact_match(pred_n, ref_n))
+        if pred is not None:
+            bleu_vals.append(bleu_score(pred, ref))
+            ast_err_vals.append(ast_error_size(pred, ref))
+            ast_tree_vals.append(ast_tree_distance(pred, ref))
+            exact_vals.append(exact_match(pred, ref))
+        else:
+            bleu_vals.append(0)
+            ast_err_vals.append(1)
+            ast_tree_vals.append(1)
+            exact_vals.append(0)
 
     n = max(len(predictions), 1)
 

@@ -1,203 +1,158 @@
 from __future__ import annotations
 
 import re
-from typing import Union
-
+from typing import Optional, Union
 import sympy as sp
-from sympy.core.function import AppliedUndef
-from sympy.parsing.sympy_parser import (
-    convert_xor,
-    implicit_application,
-    implicit_multiplication_application,
-    parse_expr,
-    standard_transformations,
-)
-
-try:
-    from sympy.parsing.latex import parse_latex
-except Exception:
-    parse_latex = None
+from sympy.parsing.latex import parse_latex as sympy_parse_latex  # требуется antlr4
 
 
-_LATEX_ALIASES = {
-    r"\arctg": "atan",
-    r"\arctan": "atan",
-    r"\ctg": "cot",
-    r"\tg": "tan",
-    r"\ln": "log",
-    r"\log": "log",
-    r"\sin": "sin",
-    r"\cos": "cos",
-    r"\tan": "tan",
-    r"\cot": "cot",
-    r"\dfrac": r"\frac",
-    r"\tfrac": r"\frac",
-}
-
-_CONSTANT_RE = re.compile(r"^C(?:_\{?[A-Za-z0-9]+\}?|\d+)?$")
-_TRANSFORMATIONS = standard_transformations + (
-    convert_xor,
-    implicit_multiplication_application,
-    implicit_application,
-)
+_BOXED_START = r"\boxed"
+_CONSTANT_RE = re.compile(r"^C(?:_\{?\d+\}?|\d+)$")
 
 
-def extract_boxed(text: str) -> str:
-    start = text.rfind(r"\boxed{")
-    if start == -1:
-        return text.strip()
+def _read_braced_content(text: str, open_brace_idx: int) -> tuple[Optional[str], int]:
+    if open_brace_idx < 0 or open_brace_idx >= len(text) or text[open_brace_idx] != "{":
+        return None, open_brace_idx
 
-    i = start + len(r"\boxed{")
-    depth = 1
-    result = []
+    depth = 0
+    content_start: Optional[int] = None
+    i = open_brace_idx
 
-    while i < len(text) and depth > 0:
+    while i < len(text):
         ch = text[i]
-
+        if ch == "\\":
+            i += 2
+            continue
         if ch == "{":
             depth += 1
+            if depth == 1:
+                content_start = i + 1
         elif ch == "}":
             depth -= 1
             if depth == 0:
-                break
-
-        result.append(ch)
+                if content_start is None:
+                    return None, open_brace_idx
+                return text[content_start:i], i + 1
         i += 1
+    return None, open_brace_idx
 
-    return "".join(result).strip()
+
+def extract_boxed(text: str) -> Optional[str]:
+    if not isinstance(text, str):
+        return None
+
+    last_content: Optional[str] = None
+    pos = 0
+
+    while True:
+        start = text.find(_BOXED_START, pos)
+        if start == -1:
+            break
+        i = start + len(_BOXED_START)
+        while i < len(text) and text[i].isspace():
+            i += 1
+        if i >= len(text) or text[i] != "{":
+            pos = start + 1
+            continue
+        content, end_idx = _read_braced_content(text, i)
+        if content is not None:
+            last_content = content
+            pos = end_idx
+        else:
+            pos = start + 1
+    return last_content
 
 
-def normalize_output(text: str) -> str:
-    text = extract_boxed(text)
-    text = text.replace(r"\left", "").replace(r"\right", "")
+def _cleanup_latex(text: str) -> str:
     text = text.strip()
-    text = re.sub(r"\s+", "", text)
+    if len(text) >= 2 and text[0] == "$" and text[-1] == "$":
+        text = text[1:-1].strip()
+    for cmd in (r"\left", r"\right", r"\displaystyle", r"\,", r"\!", r"\;", r"\:", r"\ "):
+        text = text.replace(cmd, "")
+    text = text.replace("−", "-")
+    return text.strip()
+
+
+def _extract_rhs(text: str) -> str:
+    """
+    Если строка вида y = ... или y(x) = ..., оставляем только правую часть.
+    """
+    match = re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*(?:\([^\)]*\))?\s*=\s*(.*)$", text)
+    if match:
+        return match.group(1).strip()
     return text
 
 
-def _strip_outer_wrappers(s: str) -> str:
-    s = s.strip()
-    s = re.sub(r"^\$+|\$+$", "", s)
-    s = s.replace(r"\left", "").replace(r"\right", "")
-    s = re.sub(r"\\operatorname\{([^{}]+)\}", r"\1", s)
-    s = re.sub(r"([A-Za-z][A-Za-z0-9_]*)\{\s*\((.*?)\)\s*\}", r"\1(\2)", s)
-    return s.strip()
-
-
-def _split_top_level_equal(s: str) -> tuple[str, str] | None:
-    depth = 0
-    for i, ch in enumerate(s):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth = max(depth - 1, 0)
-        elif ch == "=" and depth == 0:
-            return s[:i], s[i + 1 :]
-    return None
-
-
-def _is_strip_candidate_lhs(lhs: sp.Basic) -> bool:
-    return isinstance(lhs, (sp.Symbol, AppliedUndef))
-
-
-def _replace_simple_frac(s: str) -> str:
-    pattern = re.compile(r"\\(?:dfrac|tfrac|frac)\s*\{([^{}]+)\}\s*\{([^{}]+)\}")
-    prev = None
-    while prev != s:
-        prev = s
-        s = pattern.sub(r"(\1)/(\2)", s)
-    return s
-
-
-def _fallback_normalize(s: str) -> str:
-    s = _strip_outer_wrappers(s)
-    s = s.replace(r"\cdot", "*").replace(r"\times", "*")
-    for cmd, repl in _LATEX_ALIASES.items():
-        s = re.sub(re.escape(cmd) + r"(?![A-Za-z])", repl, s)
-    s = _replace_simple_frac(s)
-    s = re.sub(r"\s+", "", s)
-    s = s.replace("^", "**")
-    return s
-
-
-def _parse_raw_latex(s: str) -> sp.Basic:
-    if parse_latex is None:
-        raise ValueError("parse_latex is unavailable")
-    return parse_latex(s)
-
-
-import sympy as sp
-from sympy.parsing.sympy_parser import parse_expr
-
-def latex_to_sympy_expr(latex: str) -> sp.Expr:
-    raw = _strip_outer_wrappers(latex)
-
+def _parse_latex(text: str) -> sp.Basic:
+    text = _cleanup_latex(text)
+    text = _extract_rhs(text)
+    if not text:
+        raise ValueError("Empty expression after cleanup.")
     try:
-        parsed = _parse_raw_latex(raw)
-        if isinstance(parsed, sp.Equality):
-            if _is_strip_candidate_lhs(parsed.lhs):
-                return sp.sympify(parsed.rhs)
-            return sp.sympify(parsed.lhs - parsed.rhs)
-        return sp.sympify(parsed)
-    except Exception:
-        pass
-
-    try:
-        norm = _fallback_normalize(raw)
-        eq = _split_top_level_equal(norm)
-
-        if eq is not None:
-            lhs, rhs = eq
-            lhs_expr = parse_expr(lhs, transformations=_TRANSFORMATIONS, evaluate=False)
-            rhs_expr = parse_expr(rhs, transformations=_TRANSFORMATIONS, evaluate=False)
-            if _is_strip_candidate_lhs(lhs_expr):
-                return sp.sympify(rhs_expr)
-            return sp.sympify(lhs_expr - rhs_expr)
-
-        return sp.sympify(parse_expr(norm, transformations=_TRANSFORMATIONS, evaluate=False))
-    except Exception:
-        return sp.Symbol("PARSE_ERROR")
-
-def to_expr(obj: Union[str, sp.Expr]) -> sp.Expr:
-    if isinstance(obj, sp.Basic):
-        return sp.sympify(obj)
-    expr = latex_to_sympy_expr(str(obj))
-    if expr is None:
-        return sp.Symbol("PARSE_ERROR")
-    return expr
+        return sympy_parse_latex(text)
+    except Exception as exc:
+        raise ValueError(f"Could not parse LaTeX: {text!r}") from exc
 
 
-def canonicalize_constants(expr: sp.Expr) -> sp.Expr:
-    expr = sp.sympify(expr)
-    constants = sorted(
-        [s for s in expr.free_symbols if _CONSTANT_RE.match(s.name)],
-        key=lambda s: s.name,
-    )
-    mapping = {s: sp.Symbol(f"C{i+1}") for i, s in enumerate(constants)}
-    return expr.xreplace(mapping)
-
-
-def canonicalize_expr(expr: sp.Expr) -> sp.Expr:
-    expr = canonicalize_constants(sp.sympify(expr))
-
-    if expr.is_Atom:
+def to_expr(expr: Union[str, sp.Basic, sp.MatrixBase, int, float]) -> Union[sp.Basic, sp.MatrixBase]:
+    if isinstance(expr, (sp.Basic, sp.MatrixBase)):
         return expr
+    if isinstance(expr, (int, float)):
+        return sp.sympify(expr)
+    if not isinstance(expr, str):
+        return sp.sympify(expr)
 
-    args = [canonicalize_expr(arg) for arg in expr.args]
+    text = expr.strip()
+    if not text:
+        raise ValueError("Empty input string.")
 
-    if expr.is_Add or expr.is_Mul:
-        args = sorted(args, key=lambda x: sp.srepr(x))
-        return expr.func(*args, evaluate=False)
-
-    if expr.is_Pow and len(args) == 2:
-        return sp.Pow(args[0], args[1], evaluate=False)
-
-    return expr.func(*args)
+    return _parse_latex(text)
 
 
-def strip_latex_and_normalize(expr: Union[str, sp.Expr]) -> str:
-    if isinstance(expr, sp.Basic):
-        text = sp.latex(expr)
-    else:
-        text = str(expr)
-    return normalize_output(text)
+def _is_constant_symbol(sym: sp.Basic) -> bool:
+    return isinstance(sym, sp.Symbol) and bool(_CONSTANT_RE.match(sym.name))
+
+
+def _normalize_constants_for_key(expr: sp.Basic) -> sp.Basic:
+    if not isinstance(expr, sp.Basic):
+        return sp.sympify(expr)
+    repl = {s: sp.Symbol("C") for s in expr.free_symbols if _is_constant_symbol(s)}
+    return expr.xreplace(repl) if repl else expr
+
+
+def _sort_key(expr: sp.Basic):
+    return sp.default_sort_key(_normalize_constants_for_key(expr))
+
+
+def canonicalize_expr(expr: Union[str, sp.Basic, sp.MatrixBase, int, float]) -> Union[sp.Basic, sp.MatrixBase]:
+    e = to_expr(expr)
+    if isinstance(e, sp.MatrixBase):
+        return e.applyfunc(canonicalize_expr)
+
+    def _canon(node: sp.Basic) -> sp.Basic:
+        if isinstance(node, sp.Symbol) and _is_constant_symbol(node):
+            return sp.Symbol("C")
+        if node.is_Atom:
+            return node
+        args = tuple(_canon(arg) for arg in node.args)
+        if isinstance(node, sp.Equality):
+            lhs, rhs = args
+            if _sort_key(rhs) < _sort_key(lhs):
+                lhs, rhs = rhs, lhs
+            return sp.Eq(lhs, rhs, evaluate=False)
+        if node.is_Add:
+            args = tuple(sorted(args, key=_sort_key))
+            return sp.Add(*args, evaluate=False)
+        if node.is_Mul:
+            args = tuple(sorted(args, key=_sort_key))
+            return sp.Mul(*args, evaluate=False)
+        if node.is_Pow:
+            return sp.Pow(*args, evaluate=False)
+        try:
+            return node.func(*args)
+        except Exception:
+            try:
+                return node.xreplace(dict(zip(node.args, args)))
+            except Exception:
+                return node
+    return _canon(e)
