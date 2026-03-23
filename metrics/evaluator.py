@@ -22,18 +22,25 @@ def evaluate_predictions(
     exact_vals = []
 
     for pred, ref in zip(predictions, references):
-        pred = extract_boxed(pred)
+        try:
+            pred_expr = extract_boxed(pred)
 
-        if pred is not None:
-            bleu_vals.append(bleu_score(pred, ref))
-            ast_err_vals.append(ast_error_size(pred, ref))
-            ast_tree_vals.append(ast_tree_distance(pred, ref))
-            exact_vals.append(exact_match(pred, ref))
-        else:
+            if pred_expr:
+                exact_vals.append(exact_match(pred_expr, ref))
+                bleu_vals.append(bleu_score(pred_expr, ref))
+                ast_err_vals.append(ast_error_size(pred_expr, ref))
+                ast_tree_vals.append(ast_tree_distance(pred_expr, ref))
+            else:
+                exact_vals.append(0)
+                bleu_vals.append(0)
+                ast_err_vals.append(1)
+                ast_tree_vals.append(1)
+
+        except Exception:
+            exact_vals.append(0)
             bleu_vals.append(0)
             ast_err_vals.append(1)
             ast_tree_vals.append(1)
-            exact_vals.append(0)
 
     n = max(len(predictions), 1)
 
