@@ -7,20 +7,19 @@ from methods.base import BaseMethod
 
 COT_PROMPT_TEMPLATE = """You are a precise mathematical assistant specialized in solving differential equations.
 
-Solve the following differential equation with MINIMAL steps and transitions. SKIP trivial steps and AVOID unnecessary explanations.
+Solve the following differential equation with several steps and transitions.
 
 Problem (in LaTeX):
 {question}
 
 INSTRUCTIONS:
-1. Solve step by step, but keep each step CONCISE and DIRECT.
-2. Omit obvious or trivial algebraic transformations.
-3. The final solution MUST be in LaTeX.
-4. Present the FINAL answer ONLY in the format:
+1. Solve step by step as function y(x).
+2. The final solution MUST be in LaTeX.
+3. Present the FINAL answer ONLY in the format:
 
 Final answer: \\boxed{{<solution>}}
 
-5. Do NOT write anything after the boxed expression.
+4. Do NOT write anything after the boxed expression.
 
 BEGIN SOLUTION:
 """

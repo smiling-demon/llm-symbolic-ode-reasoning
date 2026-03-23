@@ -113,7 +113,7 @@ def _parse_raw_latex(s: str) -> sp.Basic:
 import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
 
-def latex_to_sympy_expr(latex: str) -> sp.Expr | None:
+def latex_to_sympy_expr(latex: str) -> sp.Expr:
     raw = _strip_outer_wrappers(latex)
 
     try:
@@ -140,12 +140,15 @@ def latex_to_sympy_expr(latex: str) -> sp.Expr | None:
 
         return sp.sympify(parse_expr(norm, transformations=_TRANSFORMATIONS, evaluate=False))
     except Exception:
-        return None
+        return sp.Symbol("PARSE_ERROR")
 
 def to_expr(obj: Union[str, sp.Expr]) -> sp.Expr:
     if isinstance(obj, sp.Basic):
         return sp.sympify(obj)
-    return latex_to_sympy_expr(str(obj))
+    expr = latex_to_sympy_expr(str(obj))
+    if expr is None:
+        return sp.Symbol("PARSE_ERROR")
+    return expr
 
 
 def canonicalize_constants(expr: sp.Expr) -> sp.Expr:
