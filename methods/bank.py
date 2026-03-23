@@ -425,13 +425,20 @@ def train_reasoning_bank(
 
         trajectories = []
         for problem_id, eq, pred, ref in zip(batch_ids, batch_eqs, responses, batch_refs):
+            if extract_boxed(pred) is None:
+                success = False
+            else:
+                try:
+                    success = exact_match(extract_boxed(pred), ref)
+                except Exception:
+                    success = False
             trajectories.append(
                 {
                     "id": problem_id,
                     "question": eq,
                     "reasoning": pred,
                     "expected_answer": ref,
-                    "success": exact_match(extract_boxed(pred), ref) if extract_boxed(pred) else False,
+                    "success": success,
                 }
             )
 
