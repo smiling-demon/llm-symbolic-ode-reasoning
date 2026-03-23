@@ -43,12 +43,28 @@ _TRANSFORMATIONS = standard_transformations + (
 
 
 def extract_boxed(text: str) -> str:
-    matches = list(re.finditer(r"\\boxed\{(.*?)\}", text, re.DOTALL))
-    if not matches:
+    start = text.rfind(r"\boxed{")
+    if start == -1:
         return text.strip()
 
-    last_match = matches[-1]
-    return last_match.group(1).strip()
+    i = start + len(r"\boxed{")
+    depth = 1
+    result = []
+
+    while i < len(text) and depth > 0:
+        ch = text[i]
+
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                break
+
+        result.append(ch)
+        i += 1
+
+    return "".join(result).strip()
 
 
 def normalize_output(text: str) -> str:
