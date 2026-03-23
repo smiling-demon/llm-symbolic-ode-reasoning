@@ -144,9 +144,9 @@ class RSA(BaseMethod):
 def rsa(
     llm,
     equations: List[str],
-    N: int = 3,
+    N: int = 4,
     K: int = 2,
-    T: int = 1,
+    T: int = 2,
     max_new_tokens: int = 1024,
     temperature: float = 0.7,
     top_p: float = 0.95,
