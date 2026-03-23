@@ -88,7 +88,7 @@ def _parse_subproblems(decomposition_text: str) -> List[str]:
     return subproblems[:3]
 
 
-class LeastToMostBatched(BaseMethod):
+class LeastToMost(BaseMethod):
     def __init__(self, llm, max_new_tokens: int = 1024):
         self.llm = llm
         self.max_new_tokens = max_new_tokens
@@ -169,9 +169,9 @@ class LeastToMostBatched(BaseMethod):
         return final_outputs
 
 
-def least_to_most_batched(
+def least_to_most(
     llm,
     equations: List[str],
     max_new_tokens: int = 1024,
 ) -> List[str]:
-    return LeastToMostBatched(llm, max_new_tokens=max_new_tokens).solve(equations)
+    return LeastToMost(llm, max_new_tokens=max_new_tokens).solve(equations)
