@@ -25,6 +25,6 @@ def ast_error_size(
         return 0.0
 
     size_diff = ast_size(diff)
-    size_ref = max(ast_size(e2), 1)
+    size_ref = ast_size(e1) + ast_size(e2)
 
-    return float(size_diff) / float(size_ref)
+    return min(float(size_diff) / float(size_ref), 1)
