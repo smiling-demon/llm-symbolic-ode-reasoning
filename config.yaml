@@ -1,0 +1,85 @@
+# ============================================================
+# GLOBAL PARAMETERS
+# ============================================================
+global:
+  base_batch_size: 24
+  max_new_tokens: 1024
+
+  train_data: "data/train.xlsx"
+  test_data: "data/test.xlsx"
+
+  out_dir: "outputs"
+  log_dir: "logs"
+
+
+# ============================================================
+# MODELS
+# ============================================================
+models:
+
+  "Qwen/Qwen2.5-3B-Instruct":
+    batch_size_scale: 1.0
+
+  "Qwen/Qwen2.5-7B-Instruct":
+    batch_size_scale: 0.5
+
+  "Qwen/Qwen2.5-14B-Instruct":
+    batch_size_scale: 0.25
+
+
+# ============================================================
+# METHODS
+# ============================================================
+methods:
+
+  Baseline: { }
+
+  ChainOfThought: { }
+
+  LeastToMost: { }
+
+  TreeOfThought:
+    # ToT-specific params
+    max_depth: 4
+    beam_width: 2
+    thoughts_per_node: 2
+    vote_rounds: 3
+    seed: None
+
+  ReasoningBank:
+    # ReasoningBank-specific params
+    embed_model_name: "BAAI/bge-base-en-v1.5"
+    storage_path: data/reasoning_bank.json
+    load: False
+    top_k: 2
+
+  RecursiveSelfAggregation:
+    # RSA-specific params
+    N: 4
+    K: 2
+    T: 2
+
+  RSAWithToT:
+    # RSA-specific params
+    N: 4
+    K: 2
+    T: 2
+
+    # ToT-specific params
+    max_depth: 4
+    beam_width: 2
+    thoughts_per_node: 2
+    vote_rounds: 3
+    seed: None
+
+  RSAWithReasoningBank:
+    # RSA-specific params
+    N: 4
+    K: 2
+    T: 2
+
+    # ReasoningBank-specific params
+    embed_model_name: "BAAI/bge-base-en-v1.5"
+    storage_path: data/reasoning_bank.json
+    load: False
+    top_k: 2
